@@ -1,0 +1,15 @@
+{
+  "short_name": "Meftehe",
+  "name": "Meftehe Teacher Assistant AI",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3449/3449692.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#007bff",
+  "background_color": "#ffffff"
+}
