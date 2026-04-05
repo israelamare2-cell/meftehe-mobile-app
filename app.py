@@ -15,8 +15,7 @@ GITHUB_URL = "https://github.com/israelamare2-cell/meftehe-bot/releases/download
 
 if API_KEY:
     genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
-
+model = genai.GenerativeModel('gemini-2.0-flash')
 # 3. መጽሐፍ ከ GitHub የሚያወርድ ተግባር (Function)
 def get_book(grade, subject):
     folder = "downloaded_books"
