@@ -8,7 +8,40 @@ import requests
 import sqlite3
 import hashlib
 import time
+import re
 
+def format_math_for_word(text):
+    """LaTeX ኮዶችን ወደ ፅድት ያለና ወርድ ላይ ወደሚነበብ የሒሳብ ምልክት መቀየሪያ"""
+    if not text:
+        return ""
+
+    # 1. መጀመሪያ የላቴክስ ምልክቶችን ($, $$, \[, \]) እናጠፋለን
+    text = text.replace('$$', '').replace('$', '').replace(r'\[', '').replace(r'\]', '')
+
+    # 2. Fractions (ክፍልፋይ): \frac{a}{b} -> (a/b)
+    text = re.sub(r'\\frac\{(.+?)\}\{(.+?)\}', r'(\1/\2)', text)
+
+    # 3. Powers (ስኩዌር): x^{2} -> x²
+    superscripts = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","n":"ⁿ","x":"ˣ"}
+    def replace_power(match):
+        p = match.group(1)
+        return "".join(superscripts.get(c, "^"+c) for c in p)
+    text = re.sub(r'\^\{?([0-9nx]+)\}?', replace_power, text)
+
+    # 4. Roots (ስኩዌር ሩት): \sqrt{x} -> √x
+    text = re.sub(r'\\sqrt\{(.+?)\}', r'√(\1)', text)
+
+    # 5. የሒሳብ ምልክቶች (Symbols)
+    symbols = {
+        r'\times': '×', r'\div': '÷', r'\pm': '±', r'\neq': '≠',
+        r'\pi': 'π', r'\degree': '°', r'\therefore': '∴', r'\le': '≤', r'\ge': '≥'
+    }
+    for latex, symbol in symbols.items():
+        text = text.replace(latex, symbol)
+
+    # 6. አላስፈላጊ የሆኑ የላቴክስ ትዕዛዞችን ማጽዳት
+    text = text.replace(r'\left', '').replace(r'\right', '').replace(r'\{', '{').replace(r'\}', '}')
+    return text
 # --- 1. የገጽ ቅንብር ---
 st.set_page_config(page_title="Meftehe AI App", page_icon="📖", layout="wide")
 
