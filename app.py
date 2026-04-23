@@ -42,6 +42,7 @@ def format_math_for_word(text):
     # 6. አላስፈላጊ የሆኑ የላቴክስ ትዕዛዞችን ማጽዳት
     text = text.replace(r'\left', '').replace(r'\right', '').replace(r'\{', '{').replace(r'\}', '}')
     return text
+
 # --- 1. የገጽ ቅንብር ---
 st.set_page_config(page_title="Meftehe AI App", page_icon="📖", layout="wide")
 
@@ -273,8 +274,11 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
 
                 # --- 8. ወደ Word መቀየር (ልክ እንደ ቦቱ) ---
                 if 'raw_content' in locals():
+                    # ======= አዲሱ የጽሁፍ ማጽጃ እዚህ ገብቷል =======
+                    clean_content = format_math_for_word(raw_content)
+
                     with st.expander("👀 የተዘጋጀውን መረጃ እዚህ ይመልከቱ"):
-                        st.write(raw_content)
+                        st.write(clean_content) # በስክሪኑ ላይም ፅድት ብሎ እንዲታይ
 
                     doc = Document()
                     if mode == "lesson":
@@ -290,12 +294,12 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
                         info.add_run(f"የመምህሩ ስም: እስራኤል አማረ\t\t\t\tየት/ቤቱ ስም: የካ ተራራ ቅድመ አንደኛ፣ አንደኛ እና መካከለኛ ደረጃ ትምህርት ቤት\n")
                         info.add_run(f"የትም ዓይነት: {subj}\t\t\t\tምዕራፍ: {chp}\n")
                         info.add_run(f"የክፍል ደረጃ: {grd}\t\t\t\tየዕለቱ ገፅ: {tos_config}")
-                        doc.add_paragraph("\n" + raw_content)
+                        doc.add_paragraph("\n" + clean_content) # ጽድት ያለው ጽሁፍ እዚህ ገባ
                         doc.add_paragraph("\nመምህር: እስራኤል አማረ _________ \t የት/ክፍል ተጠሪ: አስመራወርቅ ሀይሌ _________ \t ም/ር/መ/ር: ከበደ ተስፋዪ _________")
                     else:
                         title = doc.add_heading(f"{subj} - Grade {grd} {mode.upper()}", 0)
                         title.alignment = 1 
-                        sections = raw_content.split('\n\n')
+                        sections = clean_content.split('\n\n') # ጽድት ያለው ጽሁፍ ተከፈለ
                         for section in sections:
                             clean_sec = section.strip()
                             if not clean_sec: continue
