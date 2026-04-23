@@ -8,6 +8,11 @@ import sqlite3
 import hashlib
 import time
 
+try:
+    pypandoc.get_pandoc_version()
+except OSError:
+    print("Pandoc አልተገኘም... አሁን ዳውንሎድ እያደረግኩ ነው...")
+    pypandoc.download_pandoc()
 # --- 1. የገጽ ቅንብር ---
 st.set_page_config(page_title="Meftehe AI App", page_icon="📖", layout="wide")
 
