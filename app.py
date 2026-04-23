@@ -1,47 +1,12 @@
 import streamlit as st
 import os
 import google.generativeai as genai
-from docx import Document
-from docx.enum.section import WD_ORIENT
+import pypandoc
 import io
 import requests
 import sqlite3
 import hashlib
 import time
-import re
-
-def format_math_for_word(text):
-    """LaTeX ኮዶችን ወደ ፅድት ያለና ወርድ ላይ ወደሚነበብ የሒሳብ ምልክት መቀየሪያ"""
-    if not text:
-        return ""
-
-    # 1. መጀመሪያ የላቴክስ ምልክቶችን ($, $$, \[, \]) እናጠፋለን
-    text = text.replace('$$', '').replace('$', '').replace(r'\[', '').replace(r'\]', '')
-
-    # 2. Fractions (ክፍልፋይ): \frac{a}{b} -> (a/b)
-    text = re.sub(r'\\frac\{(.+?)\}\{(.+?)\}', r'(\1/\2)', text)
-
-    # 3. Powers (ስኩዌር): x^{2} -> x²
-    superscripts = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","n":"ⁿ","x":"ˣ"}
-    def replace_power(match):
-        p = match.group(1)
-        return "".join(superscripts.get(c, "^"+c) for c in p)
-    text = re.sub(r'\^\{?([0-9nx]+)\}?', replace_power, text)
-
-    # 4. Roots (ስኩዌር ሩት): \sqrt{x} -> √x
-    text = re.sub(r'\\sqrt\{(.+?)\}', r'√(\1)', text)
-
-    # 5. የሒሳብ ምልክቶች (Symbols)
-    symbols = {
-        r'\times': '×', r'\div': '÷', r'\pm': '±', r'\neq': '≠',
-        r'\pi': 'π', r'\degree': '°', r'\therefore': '∴', r'\le': '≤', r'\ge': '≥'
-    }
-    for latex, symbol in symbols.items():
-        text = text.replace(latex, symbol)
-
-    # 6. አላስፈላጊ የሆኑ የላቴክስ ትዕዛዞችን ማጽዳት
-    text = text.replace(r'\left', '').replace(r'\right', '').replace(r'\{', '{').replace(r'\}', '}')
-    return text
 
 # --- 1. የገጽ ቅንብር ---
 st.set_page_config(page_title="Meftehe AI App", page_icon="📖", layout="wide")
@@ -52,11 +17,10 @@ GITHUB_REPO = "meftehe-bot"
 RELEASE_TAG = "v1" 
 GITHUB_BASE_URL = f"https://github.com/{GITHUB_USER}/{GITHUB_REPO}/releases/download/{RELEASE_TAG}/"
 
-# API Load Balancing (ልክ እንደ ቦቱ)
 GEMINI_API_KEYS_STR = os.getenv('GEMINI_API_KEYS', os.getenv('GEMINI_API_KEY', ''))
 API_KEY_LIST = [k.strip() for k in GEMINI_API_KEYS_STR.split(',')] if GEMINI_API_KEYS_STR else []
 
-# --- 3. ዳታቤዝ እና SMART CACHE (ከቦቱ የተወሰደ) ---
+# --- 3. ዳታቤዝ እና SMART CACHE ---
 def init_db():
     conn = sqlite3.connect('meftehe_national_data.db', check_same_thread=False)
     c = conn.cursor()
@@ -88,7 +52,7 @@ def save_to_cache(hash_val, response_text):
 
 init_db()
 
-# --- 4. መጽሐፍ ከ GitHub የሚያወርድ (ከቦቱ የተወሰደ) ---
+# --- 4. መጽሐፍ ከ GitHub የሚያወርድ ---
 @st.cache_data
 def get_book(grade, subject):
     folder = "books"
@@ -117,7 +81,6 @@ ALL_ASSESSMENT_TYPES = ["Mid Exam", "Final Exam", "Worksheet", "Quiz", "National
 st.sidebar.title("🌟 መፍትሔ (Meftehe)")
 st.sidebar.caption("የመምህራን ረዳት ሞባይል አፕ")
 
-# ዋና ምርጫዎች
 app_lang = st.sidebar.selectbox("🌍 ቋንቋ / Language", ["am", "or", "ti", "so", "en"])
 mode = st.sidebar.radio("🛠 ምን ማዘጋጀት ይፈልጋሉ?", ["exam", "note", "lesson", "review"], format_func=lambda x: {"exam": "📝 የፈተና ዝግጅት", "note": "📚 የማስተማሪያ ኖት", "lesson": "📅 ዕለታዊ የትምህርት ዕቅድ", "review": "🔍 የመፅሀፍ ግምገማ"}[x])
 
@@ -131,7 +94,6 @@ with col2:
 
 chp = st.text_input("📂 ምዕራፍ ይምረጡ (ለምሳሌ፦ Chapter 2 ወይም All)")
 
-# እንደየ ምርጫው (Mode) የሚቀያየሩ ቅፆች
 tos_config = "auto"
 num_sets = 1
 lang_output_option = None
@@ -174,7 +136,6 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
             if not book_path:
                 st.error("❌ መፅሀፉ በ GitHub Release ላይ አልተገኘም!")
             else:
-                # የቋንቋ ህጎች ከቦቱ
                 lang_map = {
                     'am': "STRICTLY in AMHARIC language.",
                     'or': "STRICTLY in AFAAN OROMOO language using professional terms.",
@@ -189,7 +150,6 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
                 elif target_subject == "english": lang_rule = lang_map['en']
                 else: lang_rule = lang_map[app_lang]
 
-                # Prompt አዘገጃጀት (ከቦቱ የተወሰደ)
                 if mode == "lesson":
                     prompt = f"""You are a Professional Curriculum Developer specializing in SMASE (Active Learning).
                     TASK: Create a DAILY LESSON PLAN based on Chapter: {chp} and Page: {tos_config}.
@@ -197,22 +157,7 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
                     1. LANGUAGE: {lang_rule}
                     2. PEDAGOGY: Follow SMASE (Active Learning). Ensure it's learner-centered.
                     3. STYLE: Use VERY SHORT BULLET POINTS. NO long sentences.
-                    4. FORMAT: Use a CLEAR TABLE for the Teacher/Student activity sections.
-                    HEADER INFO:
-                    - School: የካ ተራራ ቅድመ አንደኛ፣ አንደኛ እና መካከለኛ ደረጃ ትምህርት ቤት
-                    - Teacher: እስራኤል አማረ
-                    
-                    SECTIONS TO INCLUDE (Short & Precise):
-                    - Objectives (አላማዎች)
-                    - Significance (አስፈላጊነት)
-                    - Prior Knowledge (ቀዳሚ ዕዉቀት)
-                    - Competency (አጥጋቢ የመማር ብቃት)
-                    
-                    TABLE STRUCTURE:
-                    Generate a table with these columns: [የመማር ማስተማር ቅደም ተከተል, ክፍለ ጊዜ, ይዘት, የመምህሩ ተግባር, የተማሪ ተግባር, ምዘና, የመርጃ መሣሪያ]
-                    
-                    DIFFERENTIATED SUPPORT (Short examples):
-                    - For High Achievers, Average Students, Low Achievers, Special Needs
+                    4. FORMAT: Use a Markdown Table for the Teacher/Student activity sections.
                     """
                 elif mode == "exam":
                     lang_output_instruction = ""
@@ -225,24 +170,17 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
                     1. SOURCE: Use ONLY the provided PDF. Focus on Chapter: {chp}, Bloom Level: {bloom}, Difficulty: {diff}.
                     2. USER COMMAND: Create exam structure: {tos_config}.
                     3. LANGUAGE: {lang_rule}
-                    4. SYMBOLS: ALL formulas in LaTeX using $inline$ or $$display$$.
+                    4. SYMBOLS: ALL math formulas MUST be in standard LaTeX using $inline$ or $$display$$.
                     5. LANGUAGE SUBJECT RULE: {lang_output_instruction}
-                    6. OUTPUT: {num_sets} different sets. Include TOS, Exam, and Answer Key."""
+                    6. OUTPUT: {num_sets} different sets. Include TOS, Exam, and Answer Key formatted cleanly in Markdown."""
                 elif mode == "review":
                     prompt = f"""You are a Precise Curriculum Auditor.
                     TASK: Conduct a PAGE-BY-PAGE Audit of the PDF for Page Range: {page_range} / Chapter: {chp}.
                     REVIEW SCOPE: {review_type}
-                    
-                    STRICT OUTPUT STRUCTURE:
-                    1. EXECUTIVE SUMMARY
-                    2. DETAILED PAGE-BY-PAGE FINDINGS
-                    3. CRITICAL ERRORS TABLE
-                    4. PEDAGOGICAL ALIGNMENT
-                    FORMATTING: LANGUAGE: {lang_rule}. USER SPECIAL NOTE: {tos_config}"""
+                    FORMATTING: LANGUAGE: {lang_rule}. USER SPECIAL NOTE: {tos_config}. Use Markdown Tables where appropriate."""
                 else:
-                    prompt = f"Professional Curriculum Expert Note Generation for Chapter {chp}... Style: {note_style}. Language: {lang_rule}..."
+                    prompt = f"Professional Curriculum Expert Note Generation for Chapter {chp}... Style: {note_style}. Language: {lang_rule}. Use standard Markdown and LaTeX for math equations."
 
-                # ፋይሉን ማንበብ እና AI መጥራት
                 with open(book_path, "rb") as f: file_data = f.read()
                 
                 cached_response, prompt_hash = get_cached_response(prompt, file_data)
@@ -260,7 +198,7 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
                             if API_KEY_LIST: genai.configure(api_key=API_KEY_LIST[current_key_index % len(API_KEY_LIST)])
                             model = genai.GenerativeModel('gemini-2.5-flash')
                             response = model.generate_content([{"mime_type": "application/pdf", "data": file_data}, prompt])
-                            raw_content = response.text.replace("###", "").replace("##", "")
+                            raw_content = response.text.replace("###", "##")
                             save_to_cache(prompt_hash, raw_content)
                             success = True
                             st.success("✅ አዲስ መረጃ በተሳካ ሁኔታ ተዘጋጅቷል!")
@@ -270,49 +208,48 @@ if st.button("🚀 አዘጋጅ / Generate", use_container_width=True):
                             time.sleep(2)
                             continue
                     
-                    if not success: st.error("⚠️ ይቅርታ፣ ሁሉም የ API ቁልፎች አሁን ላይ ተጨናንቀዋል። እባክዎ ከጥቂት ደቂቃዎች በኋላ ይሞክሩ።")
+                    if not success: st.error("⚠️ ይቅርታ፣ የ API መጨናነቅ አጋጥሟል።")
 
-                # --- 8. ወደ Word መቀየር (ልክ እንደ ቦቱ) ---
+                # --- 8. ወደ Word መቀየር (በ PANDOC - እውነተኛ Word Equations) ---
                 if 'raw_content' in locals():
-                    # ======= አዲሱ የጽሁፍ ማጽጃ እዚህ ገብቷል =======
-                    clean_content = format_math_for_word(raw_content)
+                    with st.expander("👀 የተዘጋጀውን መረጃ እዚህ ይመልከቱ (Markdown & LaTeX)"):
+                        st.markdown(raw_content)
 
-                    with st.expander("👀 የተዘጋጀውን መረጃ እዚህ ይመልከቱ"):
-                        st.write(clean_content) # በስክሪኑ ላይም ፅድት ብሎ እንዲታይ
-
-                    doc = Document()
+                    # ጽሁፉን ከነ ርዕሱ እንደ ማርክዳውን (Markdown) እናዘጋጃለን
                     if mode == "lesson":
-                        # Landscape ማረጋገጫ ለ Lesson Plan
-                        section = doc.sections[0]
-                        section.orientation = WD_ORIENT.LANDSCAPE
-                        new_width, new_height = section.page_height, section.page_width
-                        section.page_width, section.page_height = new_width, new_height
-                        
-                        header = doc.add_paragraph("ዕለታዊ የትምህርት ዕቅድ")
-                        header.alignment = 1
-                        info = doc.add_paragraph()
-                        info.add_run(f"የመምህሩ ስም: እስራኤል አማረ\t\t\t\tየት/ቤቱ ስም: የካ ተራራ ቅድመ አንደኛ፣ አንደኛ እና መካከለኛ ደረጃ ትምህርት ቤት\n")
-                        info.add_run(f"የትም ዓይነት: {subj}\t\t\t\tምዕራፍ: {chp}\n")
-                        info.add_run(f"የክፍል ደረጃ: {grd}\t\t\t\tየዕለቱ ገፅ: {tos_config}")
-                        doc.add_paragraph("\n" + clean_content) # ጽድት ያለው ጽሁፍ እዚህ ገባ
-                        doc.add_paragraph("\nመምህር: እስራኤል አማረ _________ \t የት/ክፍል ተጠሪ: አስመራወርቅ ሀይሌ _________ \t ም/ር/መ/ር: ከበደ ተስፋዪ _________")
-                    else:
-                        title = doc.add_heading(f"{subj} - Grade {grd} {mode.upper()}", 0)
-                        title.alignment = 1 
-                        sections = clean_content.split('\n\n') # ጽድት ያለው ጽሁፍ ተከፈለ
-                        for section in sections:
-                            clean_sec = section.strip()
-                            if not clean_sec: continue
-                            if clean_sec.startswith("[Page") or clean_sec.startswith("Page") or ":" in clean_sec.split('\n')[0]:
-                                p = doc.add_paragraph()
-                                run = p.add_run(clean_sec)
-                                run.bold = True
-                            elif "|" in clean_sec: doc.add_paragraph(clean_sec) 
-                            else: doc.add_paragraph(clean_sec)
+                        full_markdown = f"""
+# ዕለታዊ የትምህርት ዕቅድ
 
-                    target = io.BytesIO()
-                    doc.save(target)
-                    st.download_button("📥 በ Word ፋይል አውርድ (Download Document)", target.getvalue(), f"{subj}_{mode}.docx", type="primary", use_container_width=True)
+**መምህር:** እስራኤል አማረ | **ትምህርት ቤት:** የካ ተራራ ቅድመ አንደኛ፣ አንደኛ እና መካከለኛ ደረጃ ትምህርት ቤት
+**የትምህርት ዓይነት:** {subj} | **ምዕራፍ:** {chp} | **የክፍል ደረጃ:** {grd} | **የዕለቱ ገፅ:** {tos_config}
+
+---
+
+{raw_content}
+
+---
+*መምህር: እስራኤል አማረ _________ | የት/ክፍል ተጠሪ: አስመራወርቅ ሀይሌ _________ | ም/ር/መ/ር: ከበደ ተስፋዪ _________*
+"""
+                    else:
+                        full_markdown = f"# {subj} - Grade {grd} {mode.upper()}\n\n{raw_content}"
+
+                    output_file = f"{mode}_output.docx"
+                    
+                    # አዲሱ ሚስጥር! Pandoc AIው የጻፈውን ላቴክስ ወደ እውነተኛ Word Equation ይቀይረዋል
+                    try:
+                        pypandoc.convert_text(full_markdown, 'docx', format='md', outputfile=output_file)
+                        
+                        with open(output_file, "rb") as fp:
+                            st.download_button(
+                                label="📥 በ Word ፋይል አውርድ (ከነ እውነተኛ የሒሳብ ፎርሙላዎች)",
+                                data=fp,
+                                file_name=f"{subj}_{mode}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                type="primary",
+                                use_container_width=True
+                            )
+                    except Exception as e:
+                        st.error(f"Pandoc በትክክል አልተጫነም! እባክዎ apt.txt ፈጥረው 'pandoc' መጻፍዎን ያረጋግጡ። ስህተት: {e}")
 
 st.divider()
 st.caption("© 2026 Meftehe AI - Built for Ethiopian Teachers")
